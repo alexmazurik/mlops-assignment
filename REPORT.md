@@ -1,10 +1,11 @@
 # MLOps Assignment Report
 
-## Serving Configuration
 
 Model: `Qwen/Qwen3-30B-A3B-Instruct-2507` on one H100 80GB, served by vLLM's OpenAI-compatible API at `http://localhost:8000/v1`.
 
 The launch script is `scripts/start_vllm.sh`.
+
+## Phase 1
 
 | Setting | Value | Why |
 |---|---:|---|
@@ -22,3 +23,7 @@ Two setup issues had to be fixed before serving was stable: `transformers` was p
 Manual smoke checks on eval questions returned sensible SQL for Formula 1 circuit coordinates, Ajax superhero powers, and top California schools by enrollment.
 
 I fired the query from scripts/example_query_hardcoded.sh on the screenshots/vllm_manual_query.png
+
+## Phase 2
+
+I fired 5 seconds with 1, 2, 3 and 4 seconds between them from scripts/fire_5_agent_requests.sh
