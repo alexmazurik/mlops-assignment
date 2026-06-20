@@ -65,10 +65,60 @@ So, agent shows some improvement
 
 ## Phase 6
 
+Exp 1.
+
 Saw: throughput of the model in output tokens is small (<1k output tokens/s), and some of issue/error fields are verbose
 
 Hypo: Make error/issue less verbose, adjust prompt
 
 Changed: Added enum values of the most popular issues/errors in input to make output shorted (enum value name is shorter than its description)
 
-Result: Latency droped significantly (16 -> 9 s)!
+Result: Latency p95 droped significantly (16 -> 9 s)!
+
+
+Exp 2.
+
+Saw: compared load test with 1 rps and 10 rps: time to first token increased 20 -> 50 ms (1 rps -> 10 rps), the latency p95 increase (2s -> 9s)
+
+Hypo: Queries interfere with each others.
+
+Changed: increase parallelization of input prefill with --max-num-partial-prefills (1 -> 10)
+
+Result: latency 9s -> 40s! It doesn't work
+
+
+------------------------
+wait a second, after rerun I cannot reproduce the 9s latency. I think env has changed.
+Let's revaluate the baseline.
+The issue is the caching of the load testing queries! In the production they will be unique.
+So, I have to rerun vlllm model each time I run load test.
+--max-num-partial-prefills missed -> p95 28.5s
+--max-num-partial-prefills 1 (assumed default from docs) -> p95 32.4
+--max-num-partial-prefills 1 (assumed default from docs, rerun) -> p95 35.9
+--max-num-partial-prefills 2 -> p95 79.1
+
+No, it doesn't work!
+
+Exp 3.
+
+The same Saw and hypo
+
+Changed: MAX_MODEL_LEN (4096 -> 3072)
+
+Result: latency p95 is 50.4s now
+
+But I rerun with defalut params and got latency p95 = 59.6s. WTF???
+
+
+----------------
+
+Conclusion.
+
+I'm out of time here.
+The next step would require more detailed metrics.
+Like p50, p95, p99 for input size, output size, how many shceduled iteration prefill took, how many chunks it produced, etc.
+
+Now I don't see enough information to make next moves.
+I looked at langfuse waterfall, looked at the timings of each query. I don't see the relation between longer queries. It looks like they generate more output tokens, but I should have aggregated metrics for it.
+
+The Gant diagram should help as well.

@@ -1,3 +1,3 @@
 #!/bin/bash -e
 
-uv run python load_test/driver.py --rps 1 --duration 30
+uv run python load_test/driver.py --rps 10 --duration 30

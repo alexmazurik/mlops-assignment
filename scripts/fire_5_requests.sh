@@ -40,10 +40,4 @@ request = urllib.request.Request(
 with urllib.request.urlopen(request, timeout=120) as response:
     print(response.read().decode("utf-8"))
 PY
-
-  if (( i < 4 )); then
-    sleep_seconds=$((i + 1))
-    echo "Sleeping ${sleep_seconds}s..."
-    sleep "$sleep_seconds"
-  fi
 done

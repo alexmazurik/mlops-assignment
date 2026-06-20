@@ -25,10 +25,4 @@ for i in "${!questions[@]}"; do
     -H "Content-Type: application/json" \
     -d "${questions[$i]}" | jq
   echo
-
-  if (( i < total_requests - 1 )); then
-    sleep_for=$((i + 1))
-    echo "Sleeping ${sleep_for}s..."
-    sleep "$sleep_for"
-  fi
 done

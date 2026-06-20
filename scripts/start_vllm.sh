@@ -12,6 +12,7 @@ PORT="${VLLM_PORT:-8000}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-64}"
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-12288}"
+# MAX_NUM_PARTIAL_PREFILLS="${MAX_NUM_PARTIAL_PREFILLS:-2}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.92}"
 
 exec uv run python -m vllm.entrypoints.openai.api_server     \
@@ -25,5 +26,6 @@ exec uv run python -m vllm.entrypoints.openai.api_server     \
     --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"     \
     --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"     \
     --enable-prefix-caching     \
-    --enable-chunked-prefill     \
+    --enable-chunked-prefill
     # --disable-log-requests
+    # --max-num-partial-prefills "$MAX_NUM_PARTIAL_PREFILLS"     \
