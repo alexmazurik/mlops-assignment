@@ -38,8 +38,26 @@ which looks reasonable
 
 ## Phase 4
 
-Langfuse is now integrated. `.env` contains `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL`; `agent/server.py` maps `LANGFUSE_BASE_URL` to `LANGFUSE_HOST` so the installed Langfuse client can pick it up.
-
 I restarted the agent on port 8001 and fired 10 tagged agent requests from `evals/eval_set.jsonl` with metadata like `phase=langfuse_phase4`, `db_id=<db>`, and `source=phase4_smoke`. The local Langfuse API returned 11 traces total: 10 Phase 4 traces plus 1 smoke trace. Some requests exercised the revise loop, including the Formula 1 duplicate-row case and capped three-iteration failures.
 
-Evidence files: `screenshots/langfuse_trace.png` and `screenshots/langfuse_tags.png`. They are generated from the local Langfuse API because this VM still does not have a usable browser screenshot tool.
+## Phase 5
+
+Per iteration pass rates:
+
+| Metric | Value |
+|---|---:|
+| Total questions | 30 |
+| Correct | 12 |
+| Pass rate | 40.0% |
+| Agent errors | 0 |
+| Gold SQL errors | 0 |
+| Latency p50 | 0.681s |
+| Latency p95 | 2.869s |
+
+| Iteration | Correct | Pass rate |
+|---:|---:|---:|
+| 0 | 10 / 30 | 33.3% |
+| 1 | 11 / 30 | 36.7% |
+| 2 | 12 / 30 | 40.0% |
+
+So, agent shows some improvement
