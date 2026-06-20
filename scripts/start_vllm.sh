@@ -26,4 +26,4 @@ exec uv run python -m vllm.entrypoints.openai.api_server     \
     --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"     \
     --enable-prefix-caching     \
     --enable-chunked-prefill     \
-    --disable-log-requests
+    # --disable-log-requests
