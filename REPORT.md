@@ -110,6 +110,8 @@ Result: latency p95 is 50.4s now
 But I rerun with defalut params and got latency p95 = 59.6s. WTF???
 
 
+Phase 6 conclusion: one of the exp decreased 10/11/12 progress to 10/11/11. So, optimization damages quality.
+
 ----------------
 
 Conclusion.
