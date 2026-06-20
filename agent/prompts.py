@@ -8,6 +8,17 @@ design alongside their nodes - pick whatever placeholders your nodes pass in.
 Filling these in is part of Phase 3.
 """
 
+
+CODES_OF_ISSUES = """
+- the SQL errored (SYNTAX ERROR, RUNTIME ERROR, etc.),
+- the selected columns do not answer the question (INSUFFICIENT COLUMNS)
+- the query ignored an explicit filter (FILTER IS MISSING), aggregation (AGGREGATION IS MISSING), ordering (ORDERING IS MISSING), comparison (COMPARISON IS MISSING), or limit (LIMIT IS MISSING),
+- the result is empty even though the question expects matching rows (UNEXPECTED EMPTY RESULT),
+- an aggregate answer is NULL, which usually means the filter or column choice missed the data (UNEXPECTED NULL AGGREGATE),
+- duplicate rows appear for a question asking for entity-level values (DUPLICATE ROWS),
+- the result shape is clearly wrong, such as returning ids when names/counts were asked for (WRONG RESULT SHAPE).
+"""
+
 GENERATE_SQL_SYSTEM = """You are a careful text-to-SQL assistant for SQLite.
 
 Rules:
@@ -36,15 +47,9 @@ Decide whether the SQL execution result plausibly answers the user's question.
 Return only compact JSON with this shape:
 {"ok": true, "issue": ""}
 
-Use ok=false when:
-- the SQL errored,
-- the selected columns do not answer the question,
-- the query ignored an explicit filter, aggregation, ordering, comparison, or limit,
-- the result is empty even though the question expects matching rows,
-- an aggregate answer is NULL, which usually means the filter or column choice missed the data,
-- duplicate rows appear for a question asking for entity-level values,
-- the result shape is clearly wrong, such as returning ids when names/counts were asked for.
-
+Here the list of conditions for marking ok=false and the (capitalized) code of the issue.
+If the issue is out of the scope of the list, output it concisely in natural language (up to 10 words):
+""" + CODES_OF_ISSUES + """
 Do not require exact gold answers. If the SQL ran and the result shape matches
 the question, mark ok=true.
 """
@@ -83,5 +88,6 @@ Execution result:
 
 Verifier issue:
 {issue}
+""" + CODES_OF_ISSUES + """
 
 Write a corrected SQLite query."""
