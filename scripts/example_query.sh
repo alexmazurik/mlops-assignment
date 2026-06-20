@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_URL="${BASE_URL:-http://localhost:8000}"
+MODEL="${MODEL:-Qwen/Qwen3-30B-A3B-Instruct-2507}"
+EVAL_FILE="${EVAL_FILE:-evals/eval_set.jsonl}"
+
+cd "$(dirname "$0")/.."
+
+row="$(head -n 1 "$EVAL_FILE")"
+
+payload="$(jq -n \
+  --arg model "$MODEL" \
+  --argjson row "$row" \
+  '{
+    model: $model,
+    messages: [
+      {
+        role: "system",
+        content: "You are a text-to-SQL assistant. Given a database id and a natural language question, output only the SQL query."
+      },
+      {
+        role: "user",
+        content: "Database id: \($row.db_id)\nQuestion: \($row.question)"
+      }
+    ],
+    temperature: 0,
+    max_tokens: 512
+  }')"
+
+printf 'Curl command:\n'
+printf 'curl -sS %q -H %q -d %q\n\n' \
+  "$BASE_URL/v1/chat/completions" \
+  "Content-Type: application/json" \
+  "$payload"
+
+curl -sS "$BASE_URL/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "$payload" |
+  jq -r '.choices[0].message.content'
