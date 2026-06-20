@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -159,7 +160,9 @@ def _parse_verify_response(text: str, execution: ExecutionResult | None) -> tupl
 
 def _attach_schema(state: AgentState) -> dict:
     """Provided. Render the DB schema once at the start of the run."""
-    return {"schema": render_schema(state.db_id)}
+    schema = render_schema(state.db_id)
+    print(schema, file=sys.stderr)
+    return {"schema": schema}
 
 
 def generate_sql_node(state: AgentState) -> dict:

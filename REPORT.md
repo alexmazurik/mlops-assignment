@@ -26,4 +26,12 @@ I fired the query from scripts/example_query_hardcoded.sh on the screenshots/vll
 
 ## Phase 2
 
-I fired 5 seconds with 1, 2, 3 and 4 seconds between them from scripts/fire_5_agent_requests.sh
+I fired 5 seconds with 1, 2, 3 and 4 seconds between them from scripts/fire_5_requests.sh
+
+## Phase 3
+
+I run , at least one query finished with 2 iterations, revised the issue
+
+`issue": "Result contains duplicate rows; revise with DISTINCT or fix the join fan-out.",`
+
+which looks reasonable
