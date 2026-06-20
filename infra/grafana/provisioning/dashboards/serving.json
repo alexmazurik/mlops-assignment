@@ -416,6 +416,15 @@
           },
           "expr": "100 * (max(vllm:kv_cache_usage_perc) or max(vllm:gpu_cache_usage_perc))",
           "legendFormat": "KV used"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * max(max_over_time(vllm:kv_cache_usage_perc[5m]) or max_over_time(vllm:gpu_cache_usage_perc[5m]))",
+          "legendFormat": "KV used 5m peak"
         }
       ],
       "fieldConfig": {
@@ -483,7 +492,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * max(vllm:kv_cache_usage_perc)",
+          "expr": "100 * (max(vllm:kv_cache_usage_perc) or max(vllm:gpu_cache_usage_perc))",
           "legendFormat": "KV used %"
         }
       ],

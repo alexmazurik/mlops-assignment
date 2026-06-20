@@ -35,3 +35,11 @@ I run , at least one query finished with 2 iterations, revised the issue
 `issue": "Result contains duplicate rows; revise with DISTINCT or fix the join fan-out.",`
 
 which looks reasonable
+
+## Phase 4
+
+Langfuse is now integrated. `.env` contains `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL`; `agent/server.py` maps `LANGFUSE_BASE_URL` to `LANGFUSE_HOST` so the installed Langfuse client can pick it up.
+
+I restarted the agent on port 8001 and fired 10 tagged agent requests from `evals/eval_set.jsonl` with metadata like `phase=langfuse_phase4`, `db_id=<db>`, and `source=phase4_smoke`. The local Langfuse API returned 11 traces total: 10 Phase 4 traces plus 1 smoke trace. Some requests exercised the revise loop, including the Formula 1 duplicate-row case and capped three-iteration failures.
+
+Evidence files: `screenshots/langfuse_trace.png` and `screenshots/langfuse_tags.png`. They are generated from the local Langfuse API because this VM still does not have a usable browser screenshot tool.
