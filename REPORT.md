@@ -69,4 +69,6 @@ Saw: throughput of the model in output tokens is small (<1k output tokens/s), an
 
 Hypo: Make error/issue less verbose, adjust prompt
 
+Changed: Added enum values of the most popular issues/errors in input to make output shorted (enum value name is shorter than its description)
+
 Result: Latency droped significantly (16 -> 9 s)!
