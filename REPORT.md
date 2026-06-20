@@ -65,43 +65,8 @@ So, agent shows some improvement
 
 ## Phase 6
 
-almaz@computeinstance-e00wfaj7j5cperx879:~/mlops-assignment$ uv run python load_test/driver.py --rps 10 --duration 30
-{
-  "requested_rps": 10.0,
-  "duration_seconds": 30,
-  "wall_clock_seconds": 90.02669172000242,
-  "total_requests": 300,
-  "achieved_rps": 3.332345044212538,
-  "ok": 298,
-  "timeouts": 0,
-  "http_errors": 0,
-  "client_errors": 2,
-  "latency_p50": 7.330566497003019,
-  "latency_p95": 16.637269378999918,
-  "latency_p99": 23.25483542099755,
-  "latency_max": 33.028763444002834
-}
-
 Saw: throughput of the model in output tokens is small (<1k output tokens/s), and some of issue/error fields are verbose
 
 Hypo: Make error/issue less verbose, adjust prompt
 
-Result:
-
-{
-  "requested_rps": 10.0,
-  "duration_seconds": 30,
-  "wall_clock_seconds": 90.00459253900044,
-  "total_requests": 300,
-  "achieved_rps": 3.3331632479754316,
-  "ok": 298,
-  "timeouts": 0,
-  "http_errors": 0,
-  "client_errors": 2,
-  "latency_p50": 2.9036180949988193,
-  "latency_p95": 9.644817273998342,
-  "latency_p99": 18.32377889000054,
-  "latency_max": 35.93806573599795
-}
-
-Latency droped significantly (16 -> 9 s)!
+Result: Latency droped significantly (16 -> 9 s)!

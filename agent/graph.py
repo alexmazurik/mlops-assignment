@@ -161,7 +161,14 @@ def _parse_verify_response(text: str, execution: ExecutionResult | None) -> tupl
 def _attach_schema(state: AgentState) -> dict:
     """Provided. Render the DB schema once at the start of the run."""
     schema = render_schema(state.db_id)
-    print(schema, file=sys.stderr)
+    prefix = schema[:100]
+    suffix = schema[-100:] if len(schema) > 100 else schema
+    print(
+        f"schema chars={len(schema)} "
+        f"prefix={prefix!r} "
+        f"suffix={suffix!r}",
+        file=sys.stderr,
+    )
     return {"schema": schema}
 
 
