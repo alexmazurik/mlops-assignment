@@ -19,14 +19,18 @@ load_dotenv()
 
 from agent.graph import AgentState, graph  # noqa: E402
 
-# Langfuse callback handler. If keys are set we initialize it; failures
-# are NOT swallowed - a misconfigured Langfuse should not silently
-# produce zero traces.
-_lf_handler: Any = None
-if os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY"):
-    from langfuse.langchain import CallbackHandler
+# Langfuse is required for this assignment phase. Fail at startup instead of
+# silently running without traces.
+_missing_langfuse = [
+    name for name in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST")
+    if not os.environ.get(name)
+]
+if _missing_langfuse:
+    raise RuntimeError(f"Missing Langfuse environment variables: {', '.join(_missing_langfuse)}")
 
-    _lf_handler = CallbackHandler()
+from langfuse.langchain import CallbackHandler
+
+_lf_handler: Any = CallbackHandler()
 
 
 app = FastAPI()
@@ -55,9 +59,11 @@ def health() -> dict[str, str]:
 @app.post("/answer", response_model=AnswerResponse)
 def answer(req: AnswerRequest) -> AnswerResponse:
     state = AgentState(question=req.question, db_id=req.db)
+    trace_tags = [f"{key}:{value}" for key, value in req.tags.items()]
     config: dict[str, Any] = {
-        "callbacks": [_lf_handler] if _lf_handler is not None else [],
+        "callbacks": [_lf_handler],
         "metadata": req.tags,
+        "tags": trace_tags,
     }
     try:
         final = graph.invoke(state, config=config)
