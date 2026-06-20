@@ -88,9 +88,20 @@ def answer(req: AnswerRequest) -> AnswerResponse:
             history=history,
         )
 
+    rows = [list(r) for r in (execution.rows or [])]
+    if not final.get("verify_ok", False):
+        return AnswerResponse(
+            sql=sql,
+            rows=rows,
+            iterations=iteration,
+            ok=False,
+            error=final.get("verify_issue") or "verifier rejected final SQL",
+            history=history,
+        )
+
     return AnswerResponse(
         sql=sql,
-        rows=[list(r) for r in (execution.rows or [])],
+        rows=rows,
         iterations=iteration,
         ok=True,
         history=history,

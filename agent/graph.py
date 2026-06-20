@@ -9,13 +9,10 @@ Graph shape:
                                               ok=false ---+----> revise -> execute -> verify (loop)
 
 Loop is capped at MAX_ITERATIONS total generate/revise calls.
-
-The execute node and the graph wiring are provided. `generate_sql_node` is
-filled in as a worked example; you implement `verify`, `revise`, and the
-conditional router following the same shape.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -29,19 +26,17 @@ from agent.execution import ExecutionResult, execute_sql
 from agent.schema import render_schema
 
 # Total generate + revise calls before the loop is forced to stop.
-# 3-5 is a reasonable range; tune it as part of Phase 3.
 MAX_ITERATIONS = 3
 
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
 VLLM_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
 # vLLM ignores the key, but a hosted OpenAI-compatible provider needs a real one.
-# Lets you point the agent at e.g. OpenAI while iterating without a running vLLM.
 LLM_API_KEY = os.environ.get("OPENAI_API_KEY", "not-needed")
 
 
 @dataclass
 class AgentState:
-    """State threaded through the graph. Extend with fields you need."""
+    """State threaded through the graph."""
 
     question: str
     db_id: str
@@ -54,14 +49,110 @@ class AgentState:
     history: list[dict[str, Any]] = field(default_factory=list)
 
 
-def llm() -> ChatOpenAI:
+def llm(max_tokens: int = 256) -> ChatOpenAI:
     """Chat client pointed at VLLM_BASE_URL (your local vLLM by default)."""
     return ChatOpenAI(
         model=VLLM_MODEL,
         base_url=VLLM_BASE_URL,
         api_key=LLM_API_KEY,
         temperature=0.0,
+        max_tokens=max_tokens,
     )
+
+
+# ---- Output parsing helpers ------------------------------------------
+
+def _message_text(content: Any) -> str:
+    """Normalize LangChain message content into plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                parts.append(str(item.get("text", "")))
+            else:
+                parts.append(str(item))
+        return "".join(parts)
+    return str(content)
+
+
+def _extract_sql(text: str) -> str:
+    """Pull a SQL statement out of an LLM reply, stripping fences/prose."""
+    fenced = re.search(r"```(?:sql)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    candidate = (fenced.group(1) if fenced else text).strip()
+
+    statement = re.search(r"(?is)\b(with|select)\b.*?;", candidate)
+    if statement is None:
+        statement = re.search(r"(?is)\b(with|select)\b.*", candidate)
+    if statement is not None:
+        candidate = statement.group(0)
+
+    return candidate.strip().strip("`").strip()
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    """Find and parse the first JSON object in a model response."""
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    candidates = [fenced.group(1)] if fenced else []
+    candidates.append(text)
+
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
+        candidate = candidate.strip()
+        for idx, char in enumerate(candidate):
+            if char != "{":
+                continue
+            try:
+                obj, _end = decoder.raw_decode(candidate[idx:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict):
+                return obj
+    return None
+
+
+def _execution_is_vacuous(execution: ExecutionResult | None) -> bool:
+    """Detect successful-but-useless result sets that should be revised."""
+    if execution is None or not execution.ok:
+        return False
+    if execution.row_count == 0:
+        return True
+    rows = execution.rows or []
+    return bool(rows) and all(all(cell is None for cell in row) for row in rows)
+
+
+def _execution_has_duplicate_rows(execution: ExecutionResult | None) -> bool:
+    """Detect duplicate result rows from accidental fan-out joins."""
+    if execution is None or not execution.ok or not execution.rows:
+        return False
+    rows = execution.rows
+    return len(rows) > 1 and len(set(rows)) < len(rows)
+
+
+def _parse_verify_response(text: str, execution: ExecutionResult | None) -> tuple[bool, str]:
+    """Parse verifier JSON with execution-based fallbacks."""
+    obj = _extract_json_object(text)
+    if obj is not None:
+        ok = obj.get("ok", False)
+        if isinstance(ok, str):
+            ok = ok.strip().lower() in {"true", "yes", "1", "ok"}
+        issue = str(obj.get("issue", "")).strip()
+        return bool(ok), issue if issue else ("" if ok else "Verifier rejected the SQL.")
+
+    lowered = text.lower()
+    if '"ok": true' in lowered or "ok: true" in lowered:
+        return True, ""
+    if '"ok": false' in lowered or "ok: false" in lowered:
+        return False, text.strip()[:500] or "Verifier rejected the SQL."
+
+    if execution is None:
+        return False, "No SQL execution result was available."
+    if not execution.ok:
+        return False, execution.error or "SQL execution failed."
+    if execution.row_count == 0:
+        return False, "Query returned zero rows; revise unless the question explicitly expects no matches."
+    return False, "Verifier did not return parseable JSON."
 
 
 # ---- Nodes ------------------------------------------------------------
@@ -71,34 +162,16 @@ def _attach_schema(state: AgentState) -> dict:
     return {"schema": render_schema(state.db_id)}
 
 
-def _extract_sql(text: str) -> str:
-    """Pull a SQL statement out of an LLM reply, stripping markdown fences/prose.
-
-    Intentionally simple: take the first ```sql ... ``` block if there is one,
-    otherwise the whole reply. You may need to harden this for your prompts.
-    """
-    fenced = re.search(r"```(?:sql)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
-    return (fenced.group(1) if fenced else text).strip()
-
-
 def generate_sql_node(state: AgentState) -> dict:
-    """Worked example - the other LLM nodes follow this same shape.
-
-    Build messages from the prompts, call the shared llm(), extract the SQL,
-    and return only the state fields you changed. `iteration` is bumped here
-    (and in revise) so route_after_verify can enforce MAX_ITERATIONS.
-
-    This node is wired and ready; fill in GENERATE_SQL_SYSTEM / GENERATE_SQL_USER
-    in prompts.py to make it produce real queries.
-    """
-    response = llm().invoke([
+    """Generate the first SQL candidate."""
+    response = llm(max_tokens=256).invoke([
         ("system", prompts.GENERATE_SQL_SYSTEM),
         ("user", prompts.GENERATE_SQL_USER.format(
             schema=state.schema,
             question=state.question,
         )),
     ])
-    sql = _extract_sql(response.content)
+    sql = _extract_sql(_message_text(response.content))
     return {
         "sql": sql,
         "iteration": state.iteration + 1,
@@ -112,41 +185,64 @@ def execute_node(state: AgentState) -> dict:
 
 
 def verify_node(state: AgentState) -> dict:
-    """Decide whether state.execution plausibly answers state.question.
-
-    Follow the generate_sql_node pattern: build messages from the VERIFY_*
-    prompts, call llm(), parse the reply. Ask the model for a small JSON object
-    like {"ok": bool, "issue": str} and parse it defensively - the model may
-    wrap it in prose or fences. state.execution.render() gives you a compact
-    view of the rows or error to feed into the prompt.
-
-    Return: {"verify_ok": <bool>, "verify_issue": <str>}.
-    What counts as "not plausible" is yours to define - see the Phase 3 targets
-    in the README.
-    """
-    raise NotImplementedError("Implement in Phase 3")
+    """Decide whether state.execution plausibly answers state.question."""
+    execution_text = state.execution.render() if state.execution is not None else "ERROR: no execution result"
+    response = llm(max_tokens=96).invoke([
+        ("system", prompts.VERIFY_SYSTEM),
+        ("user", prompts.VERIFY_USER.format(
+            schema=state.schema,
+            question=state.question,
+            sql=state.sql,
+            execution=execution_text,
+        )),
+    ])
+    ok, issue = _parse_verify_response(_message_text(response.content), state.execution)
+    if ok and _execution_is_vacuous(state.execution):
+        ok = False
+        issue = "SQL executed but returned no usable values; revise the filters, joins, or selected column."
+    elif ok and _execution_has_duplicate_rows(state.execution):
+        ok = False
+        issue = "Result contains duplicate rows; revise with DISTINCT or fix the join fan-out."
+    return {
+        "verify_ok": ok,
+        "verify_issue": issue,
+        "history": state.history + [{
+            "node": "verify",
+            "ok": ok,
+            "issue": issue,
+            "iteration": state.iteration,
+        }],
+    }
 
 
 def revise_node(state: AgentState) -> dict:
-    """Produce a revised SQL query given state.verify_issue and the prior attempt.
-
-    Same shape as generate_sql_node, but the prompt should include the failing
-    SQL, its execution result, and the verifier's complaint so the model can fix
-    it. Bump the iteration counter the same way generate_sql_node does so the
-    loop terminates.
-
-    Return: {"sql": <str>, "iteration": state.iteration + 1, ...}.
-    """
-    raise NotImplementedError("Implement in Phase 3")
+    """Produce a revised SQL query from the verifier complaint."""
+    execution_text = state.execution.render() if state.execution is not None else "ERROR: no execution result"
+    response = llm(max_tokens=256).invoke([
+        ("system", prompts.REVISE_SYSTEM),
+        ("user", prompts.REVISE_USER.format(
+            schema=state.schema,
+            question=state.question,
+            sql=state.sql,
+            execution=execution_text,
+            issue=state.verify_issue or "The verifier rejected the SQL.",
+        )),
+    ])
+    sql = _extract_sql(_message_text(response.content))
+    return {
+        "sql": sql,
+        "iteration": state.iteration + 1,
+        "verify_ok": False,
+        "verify_issue": "",
+        "history": state.history + [{"node": "revise", "sql": sql}],
+    }
 
 
 def route_after_verify(state: AgentState) -> str:
-    """Conditional router: return "revise" to loop, "end" to terminate.
-
-    Two reasons to end: the verifier was happy (state.verify_ok), or you've hit
-    the iteration cap (state.iteration >= MAX_ITERATIONS). Otherwise, revise.
-    """
-    raise NotImplementedError("Implement in Phase 3")
+    """Route to END on success/cap, otherwise revise and re-execute."""
+    if state.verify_ok or state.iteration >= MAX_ITERATIONS:
+        return "end"
+    return "revise"
 
 
 # ---- Graph wiring -----------------------------------------------------

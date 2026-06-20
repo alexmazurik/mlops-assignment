@@ -32,8 +32,13 @@ async def fire_one(
     url: str,
     question: dict,
     results: list[dict],
+    tags: dict[str, str],
 ) -> None:
-    payload = {"question": question["question"], "db": question["db_id"]}
+    payload = {
+        "question": question["question"],
+        "db": question["db_id"],
+        "tags": {**tags, "db_id": question["db_id"]},
+    }
     t0 = time.monotonic()
     status = "ok"
     err: str | None = None
@@ -65,6 +70,11 @@ async def drive(args: argparse.Namespace) -> None:
     rnd = random.Random(0)
     results: list[dict] = []
     interval = 1.0 / args.rps
+    tags = {
+        "phase": "load_test",
+        "requested_rps": str(args.rps),
+        "duration_seconds": str(args.duration),
+    }
 
     connector = aiohttp.TCPConnector(limit=0)
     async with aiohttp.ClientSession(connector=connector) as session:
@@ -74,7 +84,7 @@ async def drive(args: argparse.Namespace) -> None:
         next_fire = start
         while time.monotonic() < deadline:
             q = rnd.choice(questions)
-            tasks.append(asyncio.create_task(fire_one(session, args.agent_url, q, results)))
+            tasks.append(asyncio.create_task(fire_one(session, args.agent_url, q, results, tags)))
             next_fire += interval
             sleep_for = next_fire - time.monotonic()
             if sleep_for > 0:
